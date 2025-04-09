@@ -1,15 +1,16 @@
-#check for cross compile flag if set use cross comiple
-ifdef CROSS_COMPILE
-      CC=$(CROSS_COMPILE)gcc
-else
-#else use gcc
-    CC=gcc
-endif
+# Always use ARM cross-compiler
+CROSS_COMPILE = arm-linux-gnueabihf-
 
+CC=$(CROSS_COMPILE)gcc
+
+# Default target is 'all'
 all: hello
+
+# Rule to build the 'hello' binary
 hello: hello.c
 	$(CC) -o hello hello.c
-#clean .o and binary files
+
+# Clean up the generated files
 .PHONY: clean
 clean:
-	rm -f *.o writer
+	rm -f *.o hello
