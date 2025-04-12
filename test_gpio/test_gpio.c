@@ -41,7 +41,7 @@ void setup_memory_mapped_gpio()
     gpio = (volatile unsigned int *)gpio_map;
 
     // assign pin as output
-    int reg_index = GPIO_TEST % 10;
+    int reg_index = GPIO_TEST / 10;
     int bit_index_start = (GPIO_TEST % 10) * 3;
     // clear test pin's bits
     gpio[reg_index] = gpio[reg_index] & ~(7 << bit_index_start);
