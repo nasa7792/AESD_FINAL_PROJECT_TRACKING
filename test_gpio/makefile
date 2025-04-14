@@ -1,13 +1,11 @@
-# Always use ARM cross-compiler
-CROSS_COMPILE = arm-linux-gnueabihf-
+#cross compile
+CC ?= gcc
 
-CC=$(CROSS_COMPILE)gcc
-
-# Default target is 'all'
+# Default target
 all: test_gpio
 
 # Rule to build the 'hello' binary
-test_gpio: test_gpio.c
+hello: hello.c
 	$(CC) -o test_gpio test_gpio.c
 
 # Clean up the generated files

@@ -1,9 +1,7 @@
-# Always use ARM cross-compiler
-CROSS_COMPILE = arm-linux-gnueabihf-
+#cross compile
+CC ?= gcc
 
-CC=$(CROSS_COMPILE)gcc
-
-# Default target is 'all'
+# Default target
 all: hello
 
 # Rule to build the 'hello' binary
