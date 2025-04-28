@@ -6,7 +6,7 @@ all: motor
 
 # Rule to build the 'motor' binary
 motor: motor.c
-	$(CC) -o motor motor.c -lpigpio 
+	$(CC) -o motor motor.c  
 
 # Clean up the generated files
 .PHONY: clean
