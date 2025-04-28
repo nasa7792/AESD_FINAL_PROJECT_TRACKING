@@ -1,87 +1,129 @@
+//https://embetronicx.com/tutorials/linux/device-drivers/sysfs-in-linux-kernel/
+//sources https://forums.raspberrypi.com/viewtopic.php?t=164998
 #include <stdio.h>
-#include <pigpio.h>
-#include <unistd.h> 
-#include <stdlib.h> 
-#include <string.h> 
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <syslog.h>
-
-#define MOTOR_GPIO 18 //18 is pwm pin
-#define PWM_FREQ 800
-#define PROX_PIPE "/tmp/proxpipe" //path of pipe 
-
+#define PWM_CHIP      "0"
+#define PWM_CHANNEL   "0"
+#define PROX_PIPE     "/tmp/proxpipe" //path to shared pipe
+#define PWM_PERIOD 1250
+void pwm_export()
+{
+    int fd = open("/sys/class/pwm/pwmchip" PWM_CHIP "/export", O_WRONLY);
+    if (fd < 0) {
+        syslog(LOG_ERR, "Failed to open export");
+        return;
+    }
+    write(fd, PWM_CHANNEL, strlen(PWM_CHANNEL));
+    close(fd);
+}
+void pwm_unexport()
+{
+    int fd = open("/sys/class/pwm/pwmchip" PWM_CHIP "/unexport", O_WRONLY);
+    if (fd >= 0) {
+        write(fd, PWM_CHANNEL, strlen(PWM_CHANNEL));
+        close(fd);
+    }
+}
+void pwm_enable(int enable)
+{
+    char path[128];
+    snprintf(path, sizeof(path), "/sys/class/pwm/pwmchip%s/pwm%s/enable", PWM_CHIP, PWM_CHANNEL);
+    int fd = open(path, O_WRONLY);
+    if (fd < 0) {
+        syslog(LOG_ERR, "Failed to open enable");
+        return;
+    }
+    dprintf(fd, "%d", enable);
+    close(fd);
+}
+void pwm_set_period(int period_ns)
+{
+    char path[128];
+    snprintf(path, sizeof(path), "/sys/class/pwm/pwmchip%s/pwm%s/period", PWM_CHIP, PWM_CHANNEL);
+    int fd = open(path, O_WRONLY);
+    if (fd < 0) {
+        syslog(LOG_ERR, "Failed to open period");
+        return;
+    }
+    dprintf(fd, "%d", period_ns);
+    close(fd);
+}
+void pwm_set_duty_cycle(int duty_ns)
+{
+    char path[128];
+    snprintf(path, sizeof(path), "/sys/class/pwm/pwmchip%s/pwm%s/duty_cycle", PWM_CHIP, PWM_CHANNEL);
+    int fd = open(path, O_WRONLY);
+    if (fd < 0) {
+        syslog(LOG_ERR, "Failed to open duty_cycle");
+        return;
+    }
+    dprintf(fd, "%d", duty_ns);
+    close(fd);
+}
 int get_proximity()
 {
     int fd = open(PROX_PIPE, O_RDONLY);
-    if (!fd)
+    if (fd < 0)
     {
-        syslog(LOG_ERR,"Failed to open proximity pipe");
-        return -1; // return -1 in case of error
+        syslog(LOG_ERR, "Failed to open proximity pipe");
+        return -1;
     }
-
-    char buffer[100];
-    memset(buffer, 0, sizeof(buffer));
-
-    //read data from pipe
+    char buffer[100] = {0};
     ssize_t bytesRead = read(fd, buffer, sizeof(buffer) - 1);
+    close(fd);
     if (bytesRead <= 0)
     {
         syslog(LOG_ERR, "Failed to read from pipe");
-        close(fd);
         return -1;
     }
-    buffer[bytesRead] = '\0'; 
-    close(fd);
-    //convert to int and return s
+    //convert to int and return
     return atoi(buffer);
 }
-
-int get_pwm(int proximity)
+int get_duty_cycle(int proximity)
 {
     if (proximity >= 1 && proximity <= 100)
-    {
-        return 1000000; 
-    }
+        return PWM_PERIOD * 100 / 100; // 100%
     else if (proximity > 100 && proximity <= 300)
-    {
-        return 500000; // 50%
-    }
+        return PWM_PERIOD * 50 / 100;  // 50%
     else if (proximity > 300 && proximity <= 500)
-    {
-        return 300000; // 30%
-    }
+        return PWM_PERIOD * 30 / 100;  // 30%
     else
-    {
-        return 0; //beyond this stop the motor!
-    }
+        return 0; // beyond this stop the motor
 }
-
 int main()
 {
     openlog("MOTOR_LOGS", LOG_PID | LOG_PERROR, LOG_USER);
-    if (gpioInitialise() < 0) {
-        syslog(LOG_ERR, "Pigpio initialization failed");
-        return 1;
+    pwm_export();
+    sleep(1); // wait for sysfs to create pwmX directory
+    pwm_set_period(PWM_PERIOD);
+    pwm_set_duty_cycle(0);
+    pwm_enable(1);
+    // Open the proximity FIFO once
+    int fd = open(PROX_PIPE, O_RDONLY);
+    if (fd < 0) {
+        syslog(LOG_ERR, "Failed to open proximity pipe");
+        return EXIT_FAILURE;
     }
-
     while (1)
     {
-        // get value from pipe
-        int proximity = get_proximity();
-        if (proximity == -1)
+        int proximity;
+        ssize_t bytesRead = read(fd, &proximity, sizeof(proximity));
+        if (bytesRead <= 0)
         {
-            syslog(LOG_ERR,"Error reading from pipe");
-            continue; 
+            syslog(LOG_ERR, "Failed to read from pipe or pipe closed");
+            break;
         }
-        
-        //get pwm duty cycle based on proximity data
-        int pwm_value = get_pwm(proximity);
-
-        // Set the PWM value
-        gpioHardwarePWM(MOTOR_GPIO, PWM_FREQ, pwm_value);
-
-        sleep(1); // fetch next value
+        int duty_cycle = get_duty_cycle(proximity);
+        pwm_set_duty_cycle(duty_cycle);
+        syslog(LOG_INFO, "Proximity value received at motor: %d\n", proximity);
     }
+    close(fd);
+    pwm_enable(0);
+    pwm_unexport();
+    closelog();
     return 0;
 }
