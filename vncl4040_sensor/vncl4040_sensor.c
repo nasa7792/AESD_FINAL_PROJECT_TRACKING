@@ -1,3 +1,13 @@
+/******************************************************************************
+ * File:        vncl4040_sensor.c
+ * Author:      Nalin Saxena
+
+ * Description: This File sets up the vncl4040 sensor to read proximity values
+                and also opens a shared pipe to transmit values to the node js server.abort
+                It also forwards the value to the pinet driver With ioctl calls
+* Refrence    :https://www.youtube.com/watch?v=znaxhjvDS-Y&t=636s
+ ******************************************************************************/
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -110,7 +120,6 @@ int main()
 {
     openlog("I2C_LOG", LOG_PID | LOG_PERROR, LOG_USER);
     int fd = open(I2C_DEVICE, O_RDWR);
-    syslog(LOG_ERR, "vncl says hello koppa!");
     if (fd < 0)
     {
         syslog(LOG_ERR, "Unable to open I2C device");
@@ -136,7 +145,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    // Create FIFO if it doesn't exist
+    // Create pipe if it doesnt exist
     if (access(FIFO_PATH, F_OK) == -1)
     {
         syslog(LOG_INFO, "FIFO does not exist, creating FIFO at %s", FIFO_PATH);
@@ -156,7 +165,7 @@ int main()
     int pipe_fd = open_fifo_writer();
 
     int pinet_file;
-
+    //interface to pinet driver
     pinet_file = open("/dev/pinet", O_RDWR);
     if (pinet_file < 0)
     {
@@ -174,7 +183,7 @@ int main()
             break;
         }
 
-        // Write to FIFO, check for errors
+        // dprintf- output to File Descriptor instead of Stdout
         if (dprintf(pipe_fd, "%d\n", proximity) < 0)
         {
             syslog(LOG_ERR, "Write to hello FIFO failed: %s", strerror(errno));
@@ -185,7 +194,7 @@ int main()
         }
         if (ioctl(pinet_file, PINET_IOCTL_SEND_SENSOR_DATA, &proximity) == -1)
         {
-            perror("ioctl faileddddd");
+           syslog(LOG_ERR, "pinet ioctl failed");
         }
         fsync(pipe_fd); // Ensure data is flushed
         sleep(1);       // Sleep for 1 second before next read
