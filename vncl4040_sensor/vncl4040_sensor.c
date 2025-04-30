@@ -52,6 +52,12 @@ int check_sensor_connected(int fd)
     }
 
     uint16_t device_id = (data[1] << 8) | data[0];
+    //verify if the device id is correct
+    if (device_id != 0x186)
+    {
+        syslog(LOG_INFO, "a different Device with id is connected ! 0x%04X", device_id);
+        return EXIT_FAILURE;
+    }
     syslog(LOG_INFO, "VCNL4040 Device ID: 0x%04X", device_id);
     return EXIT_SUCCESS;
 }
@@ -165,7 +171,7 @@ int main()
     int pipe_fd = open_fifo_writer();
 
     int pinet_file;
-    //interface to pinet driver
+    // interface to pinet driver
     pinet_file = open("/dev/pinet", O_RDWR);
     if (pinet_file < 0)
     {
@@ -194,7 +200,7 @@ int main()
         }
         if (ioctl(pinet_file, PINET_IOCTL_SEND_SENSOR_DATA, &proximity) == -1)
         {
-           syslog(LOG_ERR, "pinet ioctl failed");
+            syslog(LOG_ERR, "pinet ioctl failed");
         }
         fsync(pipe_fd); // Ensure data is flushed
         sleep(1);       // Sleep for 1 second before next read
